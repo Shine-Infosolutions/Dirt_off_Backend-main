@@ -15,11 +15,13 @@ const productSchema = new mongoose.Schema(
           required: true,
         },
       },
+      {
+        tax: {
+          type: Number,
+          default: 0, // Default tax value is 0
+        },
+      },
     ],
-    tax: {
-      type: Number,
-      default: 0, // Default tax value is 0
-    },
   },
   {
     timestamps: true,
