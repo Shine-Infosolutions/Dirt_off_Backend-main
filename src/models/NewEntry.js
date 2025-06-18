@@ -37,6 +37,9 @@ const NewEntrySchema = new mongoose.Schema(
           type: Number, // Can be derived: quantity * unitPrice
           required: true,
         },
+        tax: {
+          type: Number,
+        },
       },
     ],
 
