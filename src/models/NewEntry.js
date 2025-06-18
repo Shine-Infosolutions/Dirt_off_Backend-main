@@ -39,6 +39,7 @@ const NewEntrySchema = new mongoose.Schema(
         },
         tax: {
           type: Number,
+          default: 0,
         },
       },
     ],
