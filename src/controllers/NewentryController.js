@@ -255,6 +255,7 @@ exports.getRecentOrdersCount = async (req, res) => {
   try {
     const now = new Date();
     const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
 
     // Get total count
     const count = await Entry.countDocuments();
@@ -272,10 +273,10 @@ exports.getRecentOrdersCount = async (req, res) => {
     ]);
 
     // Monthly sales data for current year
-    const monthlySales = await Entry.aggregate([
+    const monthlyData = await Entry.aggregate([
       {
         $match: {
-          createdAt: {
+          "pickupAndDelivery.pickupDate": {
             $gte: new Date(currentYear, 0, 1),
             $lt: new Date(currentYear + 1, 0, 1),
           },
@@ -290,6 +291,17 @@ exports.getRecentOrdersCount = async (req, res) => {
       },
       { $sort: { _id: 1 } },
     ]);
+
+    // Create array for all months up to current month with 0 values for missing months
+    const monthlySales = [];
+    for (let month = 1; month <= currentMonth; month++) {
+      const existingData = monthlyData.find((item) => item._id === month);
+      monthlySales.push({
+        month: month,
+        totalSales: existingData ? existingData.totalSales : 0,
+        orderCount: existingData ? existingData.orderCount : 0,
+      });
+    }
 
     // Weekly sales data for last 7 days
     const weeklyData = [];
@@ -333,11 +345,7 @@ exports.getRecentOrdersCount = async (req, res) => {
           totalSales: item.totalSales,
           orderCount: item.orderCount,
         })),
-        monthlySales: monthlySales.map((item) => ({
-          month: item._id,
-          totalSales: item.totalSales,
-          orderCount: item.orderCount,
-        })),
+        monthlySales,
         weeklyData,
       },
     });
