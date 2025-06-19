@@ -15,6 +15,13 @@ const NewEntrySchema = new mongoose.Schema(
       type: Number, // This will store the incremented receipt number
       required: true,
     },
+
+    status: {
+      type: String,
+      enum: ["pending", "delivered", "collected"],
+      default: "pending",
+    },
+
     // service: {
     //   type: String,
     // },
@@ -77,6 +84,13 @@ const NewEntrySchema = new mongoose.Schema(
         type: String,
         enum: ["Self", "Agent", "Courier"],
         required: true,
+      },
+      receivedDate: {
+        type: Date,
+        required: true,
+      },
+      expectedDeliveryDate: {
+        type: Date,
       },
     },
   },
