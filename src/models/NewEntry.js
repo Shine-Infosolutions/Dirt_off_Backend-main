@@ -89,6 +89,9 @@ const NewEntrySchema = new mongoose.Schema(
         type: Date,
         required: true,
       },
+      expectedDeliveryDate: {
+        type: Date,
+      },
       deliveryDate: {
         type: Date,
       },
@@ -96,5 +99,17 @@ const NewEntrySchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Pre-save middleware to set delivery date when status becomes "delivered"
+NewEntrySchema.pre("save", function (next) {
+  if (
+    this.isModified("status") &&
+    this.status === "delivered" &&
+    !this.pickupAndDelivery.deliveryDate
+  ) {
+    this.pickupAndDelivery.deliveryDate = new Date();
+  }
+  next();
+});
 
 module.exports = mongoose.model("NewEntry", NewEntrySchema);
