@@ -376,9 +376,12 @@ exports.getPendingDeliveries = async (req, res) => {
       collectedCount,
       deliveredCount,
       todayExpectedCount,
+      todayReceivedCount,
       pendingOrders,
       collectedOrders,
       deliveredOrders,
+      todayExpectedOrders,
+      todayReceivedOrders,
     ] = await Promise.all([
       Entry.countDocuments({ status: "pending" }),
       Entry.countDocuments({ status: "collected" }),
@@ -389,9 +392,27 @@ exports.getPendingDeliveries = async (req, res) => {
           $lte: endOfToday,
         },
       }),
+      Entry.countDocuments({
+        "pickupAndDelivery.pickupDate": {
+          $gte: startOfToday,
+          $lte: endOfToday,
+        },
+      }),
       Entry.find({ status: "pending" }).sort({ createdAt: -1 }),
       Entry.find({ status: "collected" }).sort({ createdAt: -1 }),
       Entry.find({ status: "delivered" }).sort({ createdAt: -1 }),
+      Entry.find({
+        "pickupAndDelivery.expectedDeliveryDate": {
+          $gte: startOfToday,
+          $lte: endOfToday,
+        },
+      }).sort({ createdAt: -1 }),
+      Entry.find({
+        "pickupAndDelivery.pickupDate": {
+          $gte: startOfToday,
+          $lte: endOfToday,
+        },
+      }).sort({ createdAt: -1 }),
     ]);
 
     res.status(200).json({
@@ -399,11 +420,11 @@ exports.getPendingDeliveries = async (req, res) => {
       data: {
         pending: {
           count: pendingCount,
-          // orders: pendingOrders,
+          orders: pendingOrders,
         },
         collected: {
           count: collectedCount,
-          // orders: collectedOrders,
+          orders: collectedOrders,
         },
         delivered: {
           count: deliveredCount,
@@ -411,7 +432,13 @@ exports.getPendingDeliveries = async (req, res) => {
         },
         todayExpectedDeliveries: {
           count: todayExpectedCount,
-          date: startOfToday.toISOString().split("T")[0],
+          date: todayString,
+          orders: todayExpectedOrders,
+        },
+        todayReceivedOrders: {
+          count: todayReceivedCount,
+          date: todayString,
+          orders: todayReceivedOrders,
         },
         total: pendingCount + collectedCount + deliveredCount,
       },
