@@ -1,3 +1,5 @@
+//Not being used
+
 const mongoose = require("mongoose");
 
 const CustomerDetailsSchema = new mongoose.Schema({
@@ -47,7 +49,9 @@ const CustomerDetailsSchema = new mongoose.Schema({
 
   dateDelivered: {
     type: Date,
+    default: null,
   },
+
   notes: {
     type: String,
   },

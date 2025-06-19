@@ -6,13 +6,21 @@ const ReceiptNumber = require("../models/ReceiptNumber"); // Import the ReceiptN
 // Create a new entry
 exports.createNewentry = async (req, res) => {
   try {
-    const { customer, customerId, products, charges, pickupAndDelivery } =
-      req.body;
+    const {
+      customer,
+      customerId,
+      products,
+      charges,
+      pickupAndDelivery,
+      pickupDate,
+      expectedDeliveryDate,
+      deliveryDate,
+    } = req.body;
 
-    if (!customer || !customerId) {
+    if (!customer || !customerId || !pickupAndDelivery.expectedDeliveryDate) {
       return res.status(400).json({
         success: false,
-        message: "Customer and customerId are required",
+        message: "Customer, customerId and expected delivery date are required",
       });
     }
 
@@ -53,6 +61,9 @@ exports.createNewentry = async (req, res) => {
       customer,
       customerId,
       receiptNo,
+      pickupDate,
+      expectedDeliveryDate,
+      deliveryDate,
       products,
       charges,
       pickupAndDelivery,
@@ -81,20 +92,25 @@ exports.getAllEntry = async (req, res) => {
 
 exports.updateEntry = async (req, res) => {
   try {
-    const { products, charges } = req.body;
+    const { products, charges, status } = req.body;
 
     // If products are being updated, ensure tax values are included
     if (products) {
       products.forEach((product) => {
         if (!product.tax && product.tax !== 0) {
-          product.tax = 0; // Default tax to 0 if not provided
+          product.tax = 0;
         }
       });
     }
 
     // If charges are being updated, ensure taxAmount is included
     if (charges && !charges.taxAmount && charges.taxAmount !== 0) {
-      charges.taxAmount = 0; // Default taxAmount to 0 if not provided
+      charges.taxAmount = 0;
+    }
+
+    // Handle delivery date when status becomes "delivered"
+    if (status === "delivered") {
+      req.body["pickupAndDelivery.deliveryDate"] = new Date();
     }
 
     const updatedEntry = await Entry.findByIdAndUpdate(
@@ -231,5 +247,169 @@ exports.searchEntry = async (req, res) => {
   } catch (error) {
     console.error("Entry search error:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// Count orders and sales data
+exports.getRecentOrdersCount = async (req, res) => {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    // Get total count
+    const count = await Entry.countDocuments();
+
+    // Yearly sales data for all years
+    const yearlySales = await Entry.aggregate([
+      {
+        $group: {
+          _id: { $year: "$pickupAndDelivery.pickupDate" },
+          totalSales: { $sum: "$charges.totalAmount" },
+          orderCount: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Monthly sales data for current year
+    const monthlySales = await Entry.aggregate([
+      {
+        $match: {
+          createdAt: {
+            $gte: new Date(currentYear, 0, 1),
+            $lt: new Date(currentYear + 1, 0, 1),
+          },
+        },
+      },
+      {
+        $group: {
+          _id: { $month: "$pickupAndDelivery.pickupDate" },
+          totalSales: { $sum: "$charges.totalAmount" },
+          orderCount: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    // Weekly sales data for last 7 days
+    const weeklyData = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+
+      const dayData = await Entry.aggregate([
+        {
+          $match: {
+            "pickupAndDelivery.pickupDate": {
+              $gte: startOfDay,
+              $lte: endOfDay,
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalSales: { $sum: "$charges.totalAmount" },
+            orderCount: { $sum: 1 },
+          },
+        },
+      ]);
+
+      weeklyData.push({
+        date: startOfDay.toISOString().split("T")[0],
+        totalSales: dayData[0]?.totalSales || 0,
+        orderCount: dayData[0]?.orderCount || 0,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalOrders: count,
+        yearlySales: yearlySales.map((item) => ({
+          year: item._id,
+          totalSales: item.totalSales,
+          orderCount: item.orderCount,
+        })),
+        monthlySales: monthlySales.map((item) => ({
+          month: item._id,
+          totalSales: item.totalSales,
+          orderCount: item.orderCount,
+        })),
+        weeklyData,
+      },
+    });
+  } catch (error) {
+    console.error("Error counting recent orders:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+// Get orders with empty dateDelivered
+exports.getPendingDeliveries = async (req, res) => {
+  try {
+    // Get today's date in IST (GMT+5:30)
+    const now = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
+    const istNow = new Date(now.getTime() + istOffset);
+
+    // Get today's date string in YYYY-MM-DD format
+    const todayString = istNow.toISOString().split("T")[0];
+
+    // Create start and end of today in UTC (accounting for IST offset)
+    const startOfToday = new Date(todayString + "T00:00:00.000Z");
+    const endOfToday = new Date(todayString + "T23:59:59.999Z");
+
+    // Count pending and collected orders separately
+    const [
+      pendingCount,
+      collectedCount,
+      deliveredCount,
+      todayExpectedCount,
+      pendingOrders,
+      collectedOrders,
+      deliveredOrders,
+    ] = await Promise.all([
+      Entry.countDocuments({ status: "pending" }),
+      Entry.countDocuments({ status: "collected" }),
+      Entry.countDocuments({ status: "delivered" }),
+      Entry.countDocuments({
+        "pickupAndDelivery.expectedDeliveryDate": {
+          $gte: startOfToday,
+          $lte: endOfToday,
+        },
+      }),
+      Entry.find({ status: "pending" }).sort({ createdAt: -1 }),
+      Entry.find({ status: "collected" }).sort({ createdAt: -1 }),
+      Entry.find({ status: "delivered" }).sort({ createdAt: -1 }),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        pending: {
+          count: pendingCount,
+          // orders: pendingOrders,
+        },
+        collected: {
+          count: collectedCount,
+          // orders: collectedOrders,
+        },
+        delivered: {
+          count: deliveredCount,
+          // orders: collectedOrders,
+        },
+        todayExpectedDeliveries: {
+          count: todayExpectedCount,
+          date: startOfToday.toISOString().split("T")[0],
+        },
+        total: pendingCount + collectedCount + deliveredCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching pending deliveries:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
   }
 };

@@ -1,13 +1,25 @@
-const express=require('express');
-const router=express.Router();
+const express = require("express");
+const router = express.Router();
 
-const{createNewentry,getAllEntry,getEntryById,getPaginatedEntries,updateEntry,deleteEntry,searchEntry}=require('../controllers/NewentryController')
-router.post('/create', createNewentry);
-router.get('/pagination', getPaginatedEntries); // More specific, so must come before '/:id'
-router.get('/', getAllEntry);
-router.get('/search',searchEntry);
-router.get('/:id', getEntryById);
-router.put('/update/:id', updateEntry);
-router.delete('/delete/:id', deleteEntry);
+const {
+  createNewentry,
+  getAllEntry,
+  getEntryById,
+  getPaginatedEntries,
+  updateEntry,
+  deleteEntry,
+  searchEntry,
+  getRecentOrdersCount,
+  getPendingDeliveries,
+} = require("../controllers/NewentryController");
+router.post("/create", createNewentry);
+router.get("/pagination", getPaginatedEntries); // More specific, so must come before '/:id'
+router.get("/", getAllEntry);
+router.get("/search", searchEntry);
+router.get("/:id", getEntryById);
+router.put("/update/:id", updateEntry);
+router.delete("/delete/:id", deleteEntry);
+router.get("/stats/recent", getRecentOrdersCount);
+router.get("/pending/deliveries", getPendingDeliveries);
 
-module.exports=router;
+module.exports = router;

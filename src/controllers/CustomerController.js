@@ -1,3 +1,5 @@
+//Not being used
+
 const CustomerDetails = require("../models/CustomerDetails");
 
 exports.createCustomerDetails = async (req, res) => {
@@ -94,13 +96,11 @@ exports.updateCustomerDetails = async (req, res) => {
       existingCustomer.items = items;
     }
     await existingCustomer.save();
-    return res
-      .status(200)
-      .json({
-        message: "Customer Details Updated Successfully",
-        success: true,
-        data: existingCustomer,
-      });
+    return res.status(200).json({
+      message: "Customer Details Updated Successfully",
+      success: true,
+      data: existingCustomer,
+    });
   } catch (error) {
     console.error("Error fteching Customer", error);
     return res.status(500).json({
