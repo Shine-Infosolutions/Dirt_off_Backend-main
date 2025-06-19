@@ -85,11 +85,11 @@ const NewEntrySchema = new mongoose.Schema(
         enum: ["Self", "Agent", "Courier"],
         required: true,
       },
-      receivedDate: {
+      pickupDate: {
         type: Date,
         required: true,
       },
-      expectedDeliveryDate: {
+      deliveryDate: {
         type: Date,
       },
     },
