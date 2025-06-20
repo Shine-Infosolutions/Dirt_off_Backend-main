@@ -273,7 +273,7 @@ exports.getRecentOrdersCount = async (req, res) => {
     const yearlySales = await Entry.aggregate([
       {
         $group: {
-          _id: { $year: "$pickupAndDelivery.pickupDate" },
+          _id: { $year: "$createdAt" },
           totalSales: { $sum: "$charges.totalAmount" },
           orderCount: { $sum: 1 },
         },
@@ -285,7 +285,7 @@ exports.getRecentOrdersCount = async (req, res) => {
     const monthlyData = await Entry.aggregate([
       {
         $match: {
-          "pickupAndDelivery.pickupDate": {
+          createdAt: {
             $gte: new Date(currentYear, 0, 1),
             $lt: new Date(currentYear + 1, 0, 1),
           },
@@ -293,7 +293,7 @@ exports.getRecentOrdersCount = async (req, res) => {
       },
       {
         $group: {
-          _id: { $month: "$pickupAndDelivery.pickupDate" },
+          _id: { $month: "$createdAt" },
           totalSales: { $sum: "$charges.totalAmount" },
           orderCount: { $sum: 1 },
         },
@@ -323,7 +323,7 @@ exports.getRecentOrdersCount = async (req, res) => {
       const dayData = await Entry.aggregate([
         {
           $match: {
-            "pickupAndDelivery.pickupDate": {
+            createdAt: {
               $gte: startOfDay,
               $lte: endOfDay,
             },
@@ -364,7 +364,6 @@ exports.getRecentOrdersCount = async (req, res) => {
   }
 };
 
-// Get orders with empty dateDelivered
 exports.getPendingDeliveries = async (req, res) => {
   try {
     const { type } = req.query;
@@ -433,7 +432,7 @@ exports.getPendingDeliveries = async (req, res) => {
 
       case "todayReceived":
         const todayReceivedOrders = await Entry.find({
-          "pickupAndDelivery.pickupDate": {
+          createdAt: {
             $gte: startOfToday,
             $lte: endOfToday,
           },
@@ -465,7 +464,7 @@ exports.getPendingDeliveries = async (req, res) => {
             },
           }),
           Entry.countDocuments({
-            "pickupAndDelivery.pickupDate": {
+            createdAt: {
               $gte: startOfToday,
               $lte: endOfToday,
             },
