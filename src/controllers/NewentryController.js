@@ -205,15 +205,20 @@ exports.deleteEntry = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 exports.getPaginatedEntries = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1; // default to page 1
     const limit = parseInt(req.query.limit) || 10; // default to 10 per page
+    const { showAll } = req.query;
 
     const skip = (page - 1) * limit;
 
+    // Only show visible entries unless showAll=true
+    const query = showAll === "true" ? {} : { visible: true };
+
     const total = await Entry.countDocuments();
-    const entries = await Entry.find()
+    const entries = await Entry.find(query)
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 }); // optional: newest first
@@ -229,9 +234,10 @@ exports.getPaginatedEntries = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 exports.searchEntry = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, showAll } = req.query;
 
     if (!q?.trim()) {
       return res
@@ -239,11 +245,18 @@ exports.searchEntry = async (req, res) => {
         .json({ success: false, message: "Search query is required" });
     }
 
+    // Only show visible entries unless showAll=true
+    const visibilityFilter = showAll === "true" ? {} : { visible: true };
+
     const entries = await Entry.find({
-      $or: [
-        { customer: { $regex: q, $options: "i" } }, // case-insensitive search by name
-        // Convert receiptNo to string for comparison if it's a number
-        { receiptNo: isNaN(q) ? { $exists: false } : parseInt(q) }, // Only search by receiptNo if q is a number
+      $and: [
+        visibilityFilter,
+        {
+          $or: [
+            { customer: { $regex: q, $options: "i" } },
+            { receiptNo: isNaN(q) ? { $exists: false } : parseInt(q) },
+          ],
+        },
       ],
     });
 
@@ -381,10 +394,13 @@ exports.getRecentOrdersCount = async (req, res) => {
 // api to fetch dashboard stats
 exports.getPendingDeliveries = async (req, res) => {
   try {
-    const { type, page = 1 } = req.query;
+    const { type, page = 1, showAll } = req.query;
     const pageNum = parseInt(page);
     const limit = 5; // Fixed limit of 5 items per page
     const skip = (pageNum - 1) * limit;
+
+    // Only show visible entries unless showAll=true
+    const visibilityFilter = showAll === "true" ? {} : { visible: true };
 
     // Get today's date in IST (GMT+5:30)
     const now = new Date();
@@ -502,6 +518,7 @@ exports.getPendingDeliveries = async (req, res) => {
 
       default:
         // Return summary if no specific type is requested
+        const visibilityQuery = showAll === "true" ? {} : { visible: true };
         const [
           pendingCount,
           collectedCount,
@@ -517,12 +534,14 @@ exports.getPendingDeliveries = async (req, res) => {
               $gte: startOfToday,
               $lte: endOfToday,
             },
+            ...visibilityQuery,
           }),
           Entry.countDocuments({
             createdAt: {
               $gte: startOfToday,
               $lte: endOfToday,
             },
+            ...visibilityQuery,
           }),
         ]);
 
