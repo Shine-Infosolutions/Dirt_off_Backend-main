@@ -242,7 +242,8 @@ exports.searchEntry = async (req, res) => {
     const entries = await Entry.find({
       $or: [
         { customer: { $regex: q, $options: "i" } }, // case-insensitive search by name
-        { receiptNo: { $regex: q, $options: "i" } }, // case-insensitive search by receipt number
+        // Convert receiptNo to string for comparison if it's a number
+        { receiptNo: isNaN(q) ? { $exists: false } : parseInt(q) }, // Only search by receiptNo if q is a number
       ],
     });
 
