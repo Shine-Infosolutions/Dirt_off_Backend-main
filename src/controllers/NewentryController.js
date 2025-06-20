@@ -377,9 +377,15 @@ exports.getRecentOrdersCount = async (req, res) => {
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
+
+// api to fetch dashboard stats
 exports.getPendingDeliveries = async (req, res) => {
   try {
-    const { type } = req.query;
+    const { type, page = 1 } = req.query;
+    const pageNum = parseInt(page);
+    const limit = 5; // Fixed limit of 5 items per page
+    const skip = (pageNum - 1) * limit;
+
     // Get today's date in IST (GMT+5:30)
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
@@ -393,66 +399,102 @@ exports.getPendingDeliveries = async (req, res) => {
     const endOfToday = new Date(todayString + "T23:59:59.999Z");
 
     let responseData = {};
+    let query = {};
+    let total = 0;
 
     switch (type) {
       case "pending":
-        const pendingOrders = await Entry.find({ status: "pending" }).sort({
-          createdAt: -1,
-        });
+        query = { status: "pending" };
+        total = await Entry.countDocuments(query);
+        const pendingOrders = await Entry.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit);
+
         responseData = {
           type: "pending",
-          count: pendingOrders.length,
+          count: total,
+          page: pageNum,
+          totalPages: Math.ceil(total / limit),
           orders: pendingOrders,
         };
         break;
 
       case "collected":
-        const collectedOrders = await Entry.find({ status: "collected" }).sort({
-          createdAt: -1,
-        });
+        query = { status: "collected" };
+        total = await Entry.countDocuments(query);
+        const collectedOrders = await Entry.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit);
+
         responseData = {
           type: "collected",
-          count: collectedOrders.length,
+          count: total,
+          page: pageNum,
+          totalPages: Math.ceil(total / limit),
           orders: collectedOrders,
         };
         break;
 
       case "delivered":
-        const deliveredOrders = await Entry.find({ status: "delivered" }).sort({
-          createdAt: -1,
-        });
+        query = { status: "delivered" };
+        total = await Entry.countDocuments(query);
+        const deliveredOrders = await Entry.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit);
+
         responseData = {
           type: "delivered",
-          count: deliveredOrders.length,
+          count: total,
+          page: pageNum,
+          totalPages: Math.ceil(total / limit),
           orders: deliveredOrders,
         };
         break;
 
       case "todayExpected":
-        const todayExpectedOrders = await Entry.find({
+        query = {
           "pickupAndDelivery.expectedDeliveryDate": {
             $gte: startOfToday,
             $lte: endOfToday,
           },
-        }).sort({ createdAt: -1 });
+        };
+        total = await Entry.countDocuments(query);
+        const todayExpectedOrders = await Entry.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit);
+
         responseData = {
           type: "todayExpected",
-          count: todayExpectedOrders.length,
+          count: total,
+          page: pageNum,
+          totalPages: Math.ceil(total / limit),
           date: todayString,
           orders: todayExpectedOrders,
         };
         break;
 
       case "todayReceived":
-        const todayReceivedOrders = await Entry.find({
+        query = {
           createdAt: {
             $gte: startOfToday,
             $lte: endOfToday,
           },
-        }).sort({ createdAt: -1 });
+        };
+        total = await Entry.countDocuments(query);
+        const todayReceivedOrders = await Entry.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit);
+
         responseData = {
           type: "todayReceived",
-          count: todayReceivedOrders.length,
+          count: total,
+          page: pageNum,
+          totalPages: Math.ceil(total / limit),
           date: todayString,
           orders: todayReceivedOrders,
         };
