@@ -358,6 +358,7 @@ exports.getRecentOrdersCount = async (req, res) => {
 // Get orders with empty dateDelivered
 exports.getPendingDeliveries = async (req, res) => {
   try {
+    const { type } = req.query;
     // Get today's date in IST (GMT+5:30)
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
@@ -370,78 +371,113 @@ exports.getPendingDeliveries = async (req, res) => {
     const startOfToday = new Date(todayString + "T00:00:00.000Z");
     const endOfToday = new Date(todayString + "T23:59:59.999Z");
 
-    // Count pending and collected orders separately
-    const [
-      pendingCount,
-      collectedCount,
-      deliveredCount,
-      todayExpectedCount,
-      todayReceivedCount,
-      pendingOrders,
-      collectedOrders,
-      deliveredOrders,
-      todayExpectedOrders,
-      todayReceivedOrders,
-    ] = await Promise.all([
-      Entry.countDocuments({ status: "pending" }),
-      Entry.countDocuments({ status: "collected" }),
-      Entry.countDocuments({ status: "delivered" }),
-      Entry.countDocuments({
-        "pickupAndDelivery.expectedDeliveryDate": {
-          $gte: startOfToday,
-          $lte: endOfToday,
-        },
-      }),
-      Entry.countDocuments({
-        "pickupAndDelivery.pickupDate": {
-          $gte: startOfToday,
-          $lte: endOfToday,
-        },
-      }),
-      Entry.find({ status: "pending" }).sort({ createdAt: -1 }),
-      Entry.find({ status: "collected" }).sort({ createdAt: -1 }),
-      Entry.find({ status: "delivered" }).sort({ createdAt: -1 }),
-      Entry.find({
-        "pickupAndDelivery.expectedDeliveryDate": {
-          $gte: startOfToday,
-          $lte: endOfToday,
-        },
-      }).sort({ createdAt: -1 }),
-      Entry.find({
-        "pickupAndDelivery.pickupDate": {
-          $gte: startOfToday,
-          $lte: endOfToday,
-        },
-      }).sort({ createdAt: -1 }),
-    ]);
+    let responseData = {};
+
+    switch (type) {
+      case "pending":
+        const pendingOrders = await Entry.find({ status: "pending" }).sort({
+          createdAt: -1,
+        });
+        responseData = {
+          type: "pending",
+          count: pendingOrders.length,
+          orders: pendingOrders,
+        };
+        break;
+
+      case "collected":
+        const collectedOrders = await Entry.find({ status: "collected" }).sort({
+          createdAt: -1,
+        });
+        responseData = {
+          type: "collected",
+          count: collectedOrders.length,
+          orders: collectedOrders,
+        };
+        break;
+
+      case "delivered":
+        const deliveredOrders = await Entry.find({ status: "delivered" }).sort({
+          createdAt: -1,
+        });
+        responseData = {
+          type: "delivered",
+          count: deliveredOrders.length,
+          orders: deliveredOrders,
+        };
+        break;
+
+      case "todayExpected":
+        const todayExpectedOrders = await Entry.find({
+          "pickupAndDelivery.expectedDeliveryDate": {
+            $gte: startOfToday,
+            $lte: endOfToday,
+          },
+        }).sort({ createdAt: -1 });
+        responseData = {
+          type: "todayExpected",
+          count: todayExpectedOrders.length,
+          date: todayString,
+          orders: todayExpectedOrders,
+        };
+        break;
+
+      case "todayReceived":
+        const todayReceivedOrders = await Entry.find({
+          "pickupAndDelivery.pickupDate": {
+            $gte: startOfToday,
+            $lte: endOfToday,
+          },
+        }).sort({ createdAt: -1 });
+        responseData = {
+          type: "todayReceived",
+          count: todayReceivedOrders.length,
+          date: todayString,
+          orders: todayReceivedOrders,
+        };
+        break;
+
+      default:
+        // Return summary if no specific type is requested
+        const [
+          pendingCount,
+          collectedCount,
+          deliveredCount,
+          todayExpectedCount,
+          todayReceivedCount,
+        ] = await Promise.all([
+          Entry.countDocuments({ status: "pending" }),
+          Entry.countDocuments({ status: "collected" }),
+          Entry.countDocuments({ status: "delivered" }),
+          Entry.countDocuments({
+            "pickupAndDelivery.expectedDeliveryDate": {
+              $gte: startOfToday,
+              $lte: endOfToday,
+            },
+          }),
+          Entry.countDocuments({
+            "pickupAndDelivery.pickupDate": {
+              $gte: startOfToday,
+              $lte: endOfToday,
+            },
+          }),
+        ]);
+
+        responseData = {
+          summary: {
+            pending: { count: pendingCount },
+            collected: { count: collectedCount },
+            delivered: { count: deliveredCount },
+            todayExpected: { count: todayExpectedCount, date: todayString },
+            todayReceived: { count: todayReceivedCount, date: todayString },
+            total: pendingCount + collectedCount + deliveredCount,
+          },
+        };
+    }
 
     res.status(200).json({
       success: true,
-      data: {
-        pending: {
-          count: pendingCount,
-          orders: pendingOrders,
-        },
-        collected: {
-          count: collectedCount,
-          orders: collectedOrders,
-        },
-        delivered: {
-          count: deliveredCount,
-          // orders: collectedOrders,
-        },
-        todayExpectedDeliveries: {
-          count: todayExpectedCount,
-          date: todayString,
-          orders: todayExpectedOrders,
-        },
-        todayReceivedOrders: {
-          count: todayReceivedCount,
-          date: todayString,
-          orders: todayReceivedOrders,
-        },
-        total: pendingCount + collectedCount + deliveredCount,
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error("Error fetching pending deliveries:", error);
