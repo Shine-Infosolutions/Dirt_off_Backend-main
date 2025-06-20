@@ -15,7 +15,10 @@ const NewEntrySchema = new mongoose.Schema(
       type: Number, // This will store the incremented receipt number
       required: true,
     },
-
+    visible: {
+      type: Boolean,
+      default: true, // Entries are visible by default
+    },
     status: {
       type: String,
       enum: ["pending", "delivered", "collected"],
@@ -87,7 +90,7 @@ const NewEntrySchema = new mongoose.Schema(
       },
       pickupDate: {
         type: Date,
-        required: true,
+        default: null,
       },
       expectedDeliveryDate: {
         type: Date,
@@ -106,6 +109,12 @@ const NewEntrySchema = new mongoose.Schema(
 NewEntrySchema.pre("save", function (next) {
   if (this.status === "delivered" && !this.pickupAndDelivery.deliveryDate) {
     this.pickupAndDelivery.deliveryDate = new Date();
+    this.markModified("pickupAndDelivery");
+  }
+
+  // Set pickup date when status becomes "collected"
+  if (this.status === "collected" && !this.pickupAndDelivery.pickupDate) {
+    this.pickupAndDelivery.pickupDate = new Date();
     this.markModified("pickupAndDelivery");
   }
   next();

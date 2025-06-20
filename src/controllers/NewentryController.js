@@ -12,9 +12,8 @@ exports.createNewentry = async (req, res) => {
       products,
       charges,
       pickupAndDelivery,
-      pickupDate,
+
       expectedDeliveryDate,
-      deliveryDate,
     } = req.body;
 
     if (!customer || !customerId || !pickupAndDelivery.expectedDeliveryDate) {
@@ -61,9 +60,7 @@ exports.createNewentry = async (req, res) => {
       customer,
       customerId,
       receiptNo,
-      pickupDate,
       expectedDeliveryDate,
-      deliveryDate,
       products,
       charges,
       pickupAndDelivery,
@@ -83,7 +80,15 @@ exports.createNewentry = async (req, res) => {
 
 exports.getAllEntry = async (req, res) => {
   try {
-    const entry = await Entry.find().sort({ createdAt: -1 });
+    const { showAll } = req.query;
+    let query = {};
+
+    // Only show visible entries unless showAll=true
+    if (showAll !== "true") {
+      query.visible = true;
+    }
+
+    const entry = await Entry.find(query).sort({ createdAt: -1 });
     res.status(200).json({ success: true, message: "All Entry", data: entry });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -108,9 +113,13 @@ exports.updateEntry = async (req, res) => {
       charges.taxAmount = 0;
     }
 
-    // Handle delivery date when status becomes "delivered"
+    // Handle date updates based on status changes
     if (status === "delivered") {
       req.body["pickupAndDelivery.deliveryDate"] = new Date();
+    }
+
+    if (status === "collected") {
+      req.body["pickupAndDelivery.pickupDate"] = new Date();
     }
 
     const updatedEntry = await Entry.findByIdAndUpdate(
@@ -481,6 +490,34 @@ exports.getPendingDeliveries = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching pending deliveries:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+// Toggle entry visibility
+exports.toggleVisibility = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const entry = await Entry.findById(id);
+
+    if (!entry) {
+      return res.status(404).json({
+        success: false,
+        message: "Entry not found",
+      });
+    }
+
+    // Toggle the visibility
+    entry.visible = !entry.visible;
+    await entry.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Entry is now ${entry.visible ? "visible" : "hidden"}`,
+      data: { id: entry._id, visible: entry.visible },
+    });
+  } catch (error) {
+    console.error("Error toggling entry visibility:", error);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
