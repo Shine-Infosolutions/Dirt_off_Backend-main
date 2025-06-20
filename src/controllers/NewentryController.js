@@ -259,29 +259,15 @@ exports.searchEntry = async (req, res) => {
   }
 };
 
-// Count orders and sales data
-// Count orders and sales data - highly optimized version
+// Count orders and sales data - optimized without caching
 exports.getRecentOrdersCount = async (req, res) => {
   try {
-    // Use caching to improve performance
-    const cacheKey = `stats_${new Date().toISOString().split("T")[0]}`;
-    const cachedData = global.statsCache?.[cacheKey];
-
-    // Return cached data if available and less than 1 hour old
-    if (cachedData && Date.now() - cachedData.timestamp < 3600000) {
-      return res.status(200).json({
-        success: true,
-        data: cachedData.data,
-        cached: true,
-      });
-    }
-
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
-    // Simplified aggregation - combine all data in a single query
-    const aggregationResult = await Entry.aggregate([
+    // Single aggregation query with all data
+    const result = await Entry.aggregate([
       {
         $facet: {
           totalCount: [{ $count: "count" }],
@@ -321,9 +307,9 @@ exports.getRecentOrdersCount = async (req, res) => {
             {
               $group: {
                 _id: {
-                  year: { $year: "$createdAt" },
-                  month: { $month: "$createdAt" },
-                  day: { $dayOfMonth: "$createdAt" },
+                  dateString: {
+                    $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+                  },
                 },
                 totalSales: { $sum: "$charges.totalAmount" },
                 orderCount: { $sum: 1 },
@@ -334,66 +320,56 @@ exports.getRecentOrdersCount = async (req, res) => {
       },
     ]);
 
-    // Extract results
-    const result = aggregationResult[0];
-    const totalCount = result.totalCount[0]?.count || 0;
-    const yearlySales = result.yearlySales || [];
-    const monthlyData = result.monthlySales || [];
-    const weeklyRawData = result.weeklyData || [];
+    // Process results
+    const data = result[0];
+    const totalCount = data.totalCount[0]?.count || 0;
 
     // Process monthly data
+    const monthlyMap = {};
+    data.monthlySales.forEach((item) => {
+      monthlyMap[item._id] = item;
+    });
+
     const monthlySales = [];
     for (let month = 1; month <= currentMonth; month++) {
-      const existingData = monthlyData.find((item) => item._id === month);
       monthlySales.push({
         month,
-        totalSales: existingData?.totalSales || 0,
-        orderCount: existingData?.orderCount || 0,
+        totalSales: monthlyMap[month]?.totalSales || 0,
+        orderCount: monthlyMap[month]?.orderCount || 0,
       });
     }
 
     // Process weekly data
+    const weeklyMap = {};
+    data.weeklyData.forEach((item) => {
+      weeklyMap[item._id.dateString] = item;
+    });
+
     const weeklyData = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split("T")[0];
 
-      const dayData = weeklyRawData.find(
-        (d) =>
-          d._id.year === date.getFullYear() &&
-          d._id.month === date.getMonth() + 1 &&
-          d._id.day === date.getDate()
-      );
-
       weeklyData.push({
         date: dateStr,
-        totalSales: dayData?.totalSales || 0,
-        orderCount: dayData?.orderCount || 0,
+        totalSales: weeklyMap[dateStr]?.totalSales || 0,
+        orderCount: weeklyMap[dateStr]?.orderCount || 0,
       });
     }
 
-    const responseData = {
-      totalOrders: totalCount,
-      yearlySales: yearlySales.map((item) => ({
-        year: item._id,
-        totalSales: item.totalSales,
-        orderCount: item.orderCount,
-      })),
-      monthlySales,
-      weeklyData,
-    };
-
-    // Cache the result
-    if (!global.statsCache) global.statsCache = {};
-    global.statsCache[cacheKey] = {
-      timestamp: Date.now(),
-      data: responseData,
-    };
-
     res.status(200).json({
       success: true,
-      data: responseData,
+      data: {
+        totalOrders: totalCount,
+        yearlySales: data.yearlySales.map((item) => ({
+          year: item._id,
+          totalSales: item.totalSales,
+          orderCount: item.orderCount,
+        })),
+        monthlySales,
+        weeklyData,
+      },
     });
   } catch (error) {
     console.error("Error counting recent orders:", error);
