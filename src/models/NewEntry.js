@@ -120,4 +120,8 @@ NewEntrySchema.pre("save", function (next) {
   next();
 });
 
+NewEntrySchema.index({ createdAt: 1 });
+NewEntrySchema.index({ status: 1 });
+NewEntrySchema.index({ "charges.totalAmount": 1 });
+
 module.exports = mongoose.model("NewEntry", NewEntrySchema);

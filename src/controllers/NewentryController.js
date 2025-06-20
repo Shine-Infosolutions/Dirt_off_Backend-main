@@ -260,110 +260,146 @@ exports.searchEntry = async (req, res) => {
 };
 
 // Count orders and sales data
+// Count orders and sales data - highly optimized version
 exports.getRecentOrdersCount = async (req, res) => {
   try {
+    // Use caching to improve performance
+    const cacheKey = `stats_${new Date().toISOString().split("T")[0]}`;
+    const cachedData = global.statsCache?.[cacheKey];
+
+    // Return cached data if available and less than 1 hour old
+    if (cachedData && Date.now() - cachedData.timestamp < 3600000) {
+      return res.status(200).json({
+        success: true,
+        data: cachedData.data,
+        cached: true,
+      });
+    }
+
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
 
-    // Get total count
-    const count = await Entry.countDocuments();
-
-    // Yearly sales data for all years
-    const yearlySales = await Entry.aggregate([
+    // Simplified aggregation - combine all data in a single query
+    const aggregationResult = await Entry.aggregate([
       {
-        $group: {
-          _id: { $year: "$createdAt" },
-          totalSales: { $sum: "$charges.totalAmount" },
-          orderCount: { $sum: 1 },
+        $facet: {
+          totalCount: [{ $count: "count" }],
+          yearlySales: [
+            {
+              $group: {
+                _id: { $year: "$createdAt" },
+                totalSales: { $sum: "$charges.totalAmount" },
+                orderCount: { $sum: 1 },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ],
+          monthlySales: [
+            { $match: { createdAt: { $gte: new Date(currentYear, 0, 1) } } },
+            {
+              $group: {
+                _id: { $month: "$createdAt" },
+                totalSales: { $sum: "$charges.totalAmount" },
+                orderCount: { $sum: 1 },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ],
+          weeklyData: [
+            {
+              $match: {
+                createdAt: {
+                  $gte: new Date(
+                    now.getFullYear(),
+                    now.getMonth(),
+                    now.getDate() - 6
+                  ),
+                },
+              },
+            },
+            {
+              $group: {
+                _id: {
+                  year: { $year: "$createdAt" },
+                  month: { $month: "$createdAt" },
+                  day: { $dayOfMonth: "$createdAt" },
+                },
+                totalSales: { $sum: "$charges.totalAmount" },
+                orderCount: { $sum: 1 },
+              },
+            },
+          ],
         },
       },
-      { $sort: { _id: 1 } },
     ]);
 
-    // Monthly sales data for current year
-    const monthlyData = await Entry.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: new Date(currentYear, 0, 1),
-            $lt: new Date(currentYear + 1, 0, 1),
-          },
-        },
-      },
-      {
-        $group: {
-          _id: { $month: "$createdAt" },
-          totalSales: { $sum: "$charges.totalAmount" },
-          orderCount: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
+    // Extract results
+    const result = aggregationResult[0];
+    const totalCount = result.totalCount[0]?.count || 0;
+    const yearlySales = result.yearlySales || [];
+    const monthlyData = result.monthlySales || [];
+    const weeklyRawData = result.weeklyData || [];
 
-    // Create array for all months up to current month with 0 values for missing months
+    // Process monthly data
     const monthlySales = [];
     for (let month = 1; month <= currentMonth; month++) {
       const existingData = monthlyData.find((item) => item._id === month);
       monthlySales.push({
-        month: month,
-        totalSales: existingData ? existingData.totalSales : 0,
-        orderCount: existingData ? existingData.orderCount : 0,
+        month,
+        totalSales: existingData?.totalSales || 0,
+        orderCount: existingData?.orderCount || 0,
       });
     }
 
-    // Weekly sales data for last 7 days
+    // Process weekly data
     const weeklyData = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
-      const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+      const dateStr = date.toISOString().split("T")[0];
 
-      const dayData = await Entry.aggregate([
-        {
-          $match: {
-            createdAt: {
-              $gte: startOfDay,
-              $lte: endOfDay,
-            },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalSales: { $sum: "$charges.totalAmount" },
-            orderCount: { $sum: 1 },
-          },
-        },
-      ]);
+      const dayData = weeklyRawData.find(
+        (d) =>
+          d._id.year === date.getFullYear() &&
+          d._id.month === date.getMonth() + 1 &&
+          d._id.day === date.getDate()
+      );
 
       weeklyData.push({
-        date: startOfDay.toISOString().split("T")[0],
-        totalSales: dayData[0]?.totalSales || 0,
-        orderCount: dayData[0]?.orderCount || 0,
+        date: dateStr,
+        totalSales: dayData?.totalSales || 0,
+        orderCount: dayData?.orderCount || 0,
       });
     }
 
+    const responseData = {
+      totalOrders: totalCount,
+      yearlySales: yearlySales.map((item) => ({
+        year: item._id,
+        totalSales: item.totalSales,
+        orderCount: item.orderCount,
+      })),
+      monthlySales,
+      weeklyData,
+    };
+
+    // Cache the result
+    if (!global.statsCache) global.statsCache = {};
+    global.statsCache[cacheKey] = {
+      timestamp: Date.now(),
+      data: responseData,
+    };
+
     res.status(200).json({
       success: true,
-      data: {
-        totalOrders: count,
-        yearlySales: yearlySales.map((item) => ({
-          year: item._id,
-          totalSales: item.totalSales,
-          orderCount: item.orderCount,
-        })),
-        monthlySales,
-        weeklyData,
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error("Error counting recent orders:", error);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
-
 exports.getPendingDeliveries = async (req, res) => {
   try {
     const { type } = req.query;
