@@ -123,5 +123,7 @@ NewEntrySchema.pre("save", function (next) {
 NewEntrySchema.index({ createdAt: 1 });
 NewEntrySchema.index({ status: 1 });
 NewEntrySchema.index({ "charges.totalAmount": 1 });
+NewEntrySchema.index({ "pickupAndDelivery.expectedDeliveryDate": 1 });
+NewEntrySchema.index({ visible: 1 });
 
 module.exports = mongoose.model("NewEntry", NewEntrySchema);
