@@ -19,7 +19,7 @@ const {
 const allowedOrigins = [
   "http://localhost:5173",
   "https://dirt-deploy.vercel.app",
-
+  "https://dirt-deploy-nine.vercel.app",
   "http://127.0.0.1:5173",
   "https://dirt-off-dep.vercel.app",
   "https://dirt-off-de.onrender.com",
