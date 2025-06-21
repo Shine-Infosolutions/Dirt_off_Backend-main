@@ -415,68 +415,56 @@ exports.getPendingDeliveries = async (req, res) => {
     const startOfToday = today.startOf("day").toDate();
     const endOfToday = today.endOf("day").toDate();
 
-    // If no specific type is requested, return summary with minimal data
+    // If no specific type is requested, return summary only
     if (!type) {
-      // Use a single aggregation query for all counts
+      // Use lean aggregation for counts only
       const counts = await Entry.aggregate([
+        { $match: visibilityFilter },
         {
-          $match: visibilityFilter,
-        },
-        {
-          $facet: {
-            pending: [{ $match: { status: "pending" } }, { $count: "count" }],
-            collected: [
-              { $match: { status: "collected" } },
-              { $count: "count" },
-            ],
-            delivered: [
-              { $match: { status: "delivered" } },
-              { $count: "count" },
-            ],
-            todayExpected: [
-              {
-                $match: {
-                  "pickupAndDelivery.expectedDeliveryDate": {
-                    $gte: startOfToday,
-                    $lte: endOfToday,
-                  },
-                  status: { $ne: "delivered" },
-                },
-              },
-              { $count: "count" },
-            ],
-            todayReceived: [
-              {
-                $match: {
-                  createdAt: {
-                    $gte: startOfToday,
-                    $lte: endOfToday,
-                  },
-                },
-              },
-              { $count: "count" },
-            ],
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
           },
         },
       ]);
 
-      const result = counts[0];
-      const pendingCount = result.pending[0]?.count || 0;
-      const collectedCount = result.collected[0]?.count || 0;
-      const deliveredCount = result.delivered[0]?.count || 0;
-      const todayExpectedCount = result.todayExpected[0]?.count || 0;
-      const todayReceivedCount = result.todayReceived[0]?.count || 0;
+      // Get today's expected and received counts separately
+      const [todayExpected, todayReceived] = await Promise.all([
+        Entry.countDocuments({
+          ...visibilityFilter,
+          "pickupAndDelivery.expectedDeliveryDate": {
+            $gte: startOfToday,
+            $lte: endOfToday,
+          },
+          status: { $ne: "delivered" },
+        }),
+        Entry.countDocuments({
+          ...visibilityFilter,
+          createdAt: { $gte: startOfToday, $lte: endOfToday },
+        }),
+      ]);
+
+      // Process status counts
+      const statusCounts = { pending: 0, collected: 0, delivered: 0 };
+      counts.forEach((item) => {
+        if (item._id && statusCounts.hasOwnProperty(item._id)) {
+          statusCounts[item._id] = item.count;
+        }
+      });
 
       return res.status(200).json({
         success: true,
         data: {
           summary: {
-            pending: { count: pendingCount },
-            collected: { count: collectedCount },
-            delivered: { count: deliveredCount },
-            todayExpected: { count: todayExpectedCount, date: todayString },
-            todayReceived: { count: todayReceivedCount, date: todayString },
-            total: pendingCount + collectedCount + deliveredCount,
+            pending: { count: statusCounts.pending },
+            collected: { count: statusCounts.collected },
+            delivered: { count: statusCounts.delivered },
+            todayExpected: { count: todayExpected, date: todayString },
+            todayReceived: { count: todayReceived, date: todayString },
+            total:
+              statusCounts.pending +
+              statusCounts.collected +
+              statusCounts.delivered,
           },
         },
       });
@@ -515,11 +503,14 @@ exports.getPendingDeliveries = async (req, res) => {
         });
     }
 
-    // Run count and find in parallel
-    const [total, orders] = await Promise.all([
+    // Run count and find in parallel with lean queries
+    const [count, docs] = await Promise.all([
       Entry.countDocuments(query),
       Entry.find(query)
-        .select("-products.tax") // Exclude fields that aren't needed
+        .lean()
+        .select(
+          "customer customerId receiptNo status charges pickupAndDelivery createdAt"
+        )
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -529,11 +520,11 @@ exports.getPendingDeliveries = async (req, res) => {
       success: true,
       data: {
         type,
-        count: total,
+        count,
         page: pageNum,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(count / limit),
         date: type.includes("today") ? todayString : undefined,
-        orders,
+        orders: docs,
       },
     });
   } catch (error) {
