@@ -1,7 +1,13 @@
 const Entry = require("../models/NewEntry");
 const Customer = require("../models/Customer");
-
 const ReceiptNumber = require("../models/ReceiptNumber"); // Import the ReceiptNumber model
+const dayjs = require("dayjs");
+const utc = require("dayjs/plugin/utc");
+const timezone = require("dayjs/plugin/timezone");
+
+// Configure dayjs to handle timezones
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Create a new entry
 exports.createNewentry = async (req, res) => {
@@ -392,168 +398,78 @@ exports.getRecentOrdersCount = async (req, res) => {
 };
 
 // api to fetch dashboard stats
+// Optimized dashboard stats API
 exports.getPendingDeliveries = async (req, res) => {
   try {
     const { type, page = 1, showAll } = req.query;
     const pageNum = parseInt(page);
-    const limit = 5; // Fixed limit of 5 items per page
+    const limit = 5;
     const skip = (pageNum - 1) * limit;
 
     // Only show visible entries unless showAll=true
     const visibilityFilter = showAll === "true" ? {} : { visible: true };
 
-    // Get today's date in IST (GMT+5:30)
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000; // 5.5 hours in milliseconds
-    const istNow = new Date(now.getTime() + istOffset);
+    // Get today's date in IST using dayjs
+    const today = dayjs().tz("Asia/Kolkata");
+    const todayString = today.format("YYYY-MM-DD");
+    const startOfToday = today.startOf("day").toDate();
+    const endOfToday = today.endOf("day").toDate();
 
-    // Get today's date string in YYYY-MM-DD format
-    const todayString = istNow.toISOString().split("T")[0];
-
-    // Create start and end of today in UTC (accounting for IST offset)
-    const startOfToday = new Date(todayString + "T00:00:00.000Z");
-    const endOfToday = new Date(todayString + "T23:59:59.999Z");
-
-    let responseData = {};
-    let query = {};
-    let total = 0;
-
-    switch (type) {
-      case "pending":
-        query = { status: "pending" };
-        total = await Entry.countDocuments(query);
-        const pendingOrders = await Entry.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit);
-
-        responseData = {
-          type: "pending",
-          count: total,
-          page: pageNum,
-          totalPages: Math.ceil(total / limit),
-          orders: pendingOrders,
-        };
-        break;
-
-      case "collected":
-        query = { status: "collected" };
-        total = await Entry.countDocuments(query);
-        const collectedOrders = await Entry.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit);
-
-        responseData = {
-          type: "collected",
-          count: total,
-          page: pageNum,
-          totalPages: Math.ceil(total / limit),
-          orders: collectedOrders,
-        };
-        break;
-
-      case "delivered":
-        query = { status: "delivered" };
-        total = await Entry.countDocuments(query);
-        const deliveredOrders = await Entry.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit);
-
-        responseData = {
-          type: "delivered",
-          count: total,
-          page: pageNum,
-          totalPages: Math.ceil(total / limit),
-          orders: deliveredOrders,
-        };
-        break;
-
-      case "todayExpected":
-        query = {
-          "pickupAndDelivery.expectedDeliveryDate": {
-            $gte: startOfToday,
-            $lte: endOfToday,
+    // If no specific type is requested, return summary with minimal data
+    if (!type) {
+      // Use a single aggregation query for all counts
+      const counts = await Entry.aggregate([
+        {
+          $match: visibilityFilter,
+        },
+        {
+          $facet: {
+            pending: [{ $match: { status: "pending" } }, { $count: "count" }],
+            collected: [
+              { $match: { status: "collected" } },
+              { $count: "count" },
+            ],
+            delivered: [
+              { $match: { status: "delivered" } },
+              { $count: "count" },
+            ],
+            todayExpected: [
+              {
+                $match: {
+                  "pickupAndDelivery.expectedDeliveryDate": {
+                    $gte: startOfToday,
+                    $lte: endOfToday,
+                  },
+                  status: { $ne: "delivered" },
+                },
+              },
+              { $count: "count" },
+            ],
+            todayReceived: [
+              {
+                $match: {
+                  createdAt: {
+                    $gte: startOfToday,
+                    $lte: endOfToday,
+                  },
+                },
+              },
+              { $count: "count" },
+            ],
           },
-          status: { $ne: "delivered" }, // Exclude delivered entries
-          ...visibilityFilter,
-        };
-        total = await Entry.countDocuments(query);
-        const todayExpectedOrders = await Entry.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit);
+        },
+      ]);
 
-        responseData = {
-          type: "todayExpected",
-          count: total,
-          page: pageNum,
-          totalPages: Math.ceil(total / limit),
-          date: todayString,
-          orders: todayExpectedOrders,
-        };
-        break;
+      const result = counts[0];
+      const pendingCount = result.pending[0]?.count || 0;
+      const collectedCount = result.collected[0]?.count || 0;
+      const deliveredCount = result.delivered[0]?.count || 0;
+      const todayExpectedCount = result.todayExpected[0]?.count || 0;
+      const todayReceivedCount = result.todayReceived[0]?.count || 0;
 
-      case "todayReceived":
-        query = {
-          createdAt: {
-            $gte: startOfToday,
-            $lte: endOfToday,
-          },
-          ...visibilityFilter,
-        };
-        total = await Entry.countDocuments(query);
-        const todayReceivedOrders = await Entry.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit);
-
-        responseData = {
-          type: "todayReceived",
-          count: total,
-          page: pageNum,
-          totalPages: Math.ceil(total / limit),
-          date: todayString,
-          orders: todayReceivedOrders,
-        };
-        break;
-
-      default:
-        // Return summary if no specific type is requested
-        const visibilityQuery = showAll === "true" ? {} : { visible: true };
-
-        // For todayExpected count, exclude delivered entries
-        const todayExpectedQuery = {
-          "pickupAndDelivery.expectedDeliveryDate": {
-            $gte: startOfToday,
-            $lte: endOfToday,
-          },
-          status: { $ne: "delivered" },
-          ...visibilityQuery,
-        };
-
-        const [
-          pendingCount,
-          collectedCount,
-          deliveredCount,
-          todayExpectedCount,
-          todayReceivedCount,
-        ] = await Promise.all([
-          Entry.countDocuments({ status: "pending", ...visibilityQuery }),
-          Entry.countDocuments({ status: "collected", ...visibilityQuery }),
-          Entry.countDocuments({ status: "delivered", ...visibilityQuery }),
-          Entry.countDocuments(todayExpectedQuery),
-          Entry.countDocuments({
-            createdAt: {
-              $gte: startOfToday,
-              $lte: endOfToday,
-            },
-            ...visibilityQuery,
-          }),
-        ]);
-
-        responseData = {
+      return res.status(200).json({
+        success: true,
+        data: {
           summary: {
             pending: { count: pendingCount },
             collected: { count: collectedCount },
@@ -562,12 +478,63 @@ exports.getPendingDeliveries = async (req, res) => {
             todayReceived: { count: todayReceivedCount, date: todayString },
             total: pendingCount + collectedCount + deliveredCount,
           },
-        };
+        },
+      });
     }
+
+    // For specific type requests, optimize the query
+    let query = { ...visibilityFilter };
+
+    switch (type) {
+      case "pending":
+        query.status = "pending";
+        break;
+      case "collected":
+        query.status = "collected";
+        break;
+      case "delivered":
+        query.status = "delivered";
+        break;
+      case "todayExpected":
+        query["pickupAndDelivery.expectedDeliveryDate"] = {
+          $gte: startOfToday,
+          $lte: endOfToday,
+        };
+        query.status = { $ne: "delivered" };
+        break;
+      case "todayReceived":
+        query.createdAt = {
+          $gte: startOfToday,
+          $lte: endOfToday,
+        };
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: "Invalid type parameter",
+        });
+    }
+
+    // Run count and find in parallel
+    const [total, orders] = await Promise.all([
+      Entry.countDocuments(query),
+      Entry.find(query)
+        .select("-products.tax") // Exclude fields that aren't needed
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+    ]);
 
     res.status(200).json({
       success: true,
-      data: responseData,
+      data: {
+        type,
+        count: total,
+        page: pageNum,
+        totalPages: Math.ceil(total / limit),
+        date: type.includes("today") ? todayString : undefined,
+        orders,
+      },
     });
   } catch (error) {
     console.error("Error fetching pending deliveries:", error);
