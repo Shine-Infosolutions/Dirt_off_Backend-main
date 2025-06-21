@@ -4,6 +4,11 @@ const dayjs = require("dayjs");
 const utc = require("dayjs/plugin/utc");
 const timezone = require("dayjs/plugin/timezone");
 
+// Cache setup
+let statsCache = null;
+let lastCacheTime = 0;
+const CACHE_TTL = 60000; // 1 minute cache
+
 // Import models directly
 const Entry = require("../models/NewEntry");
 const EntryStat = require("../models/EntryStat");
@@ -47,9 +52,9 @@ async function updateStats() {
       }),
     ]);
 
-    // Update or create stats document
-    await EntryStat.findOneAndUpdate(
-      {}, // Find the first document (we'll only have one)
+    // Update the database
+    const stats = await EntryStat.findOneAndUpdate(
+      {},
       {
         totalEntries,
         pendingCount,
@@ -62,9 +67,14 @@ async function updateStats() {
       { upsert: true, new: true }
     );
 
-    console.log("Stats updated successfully");
+    // Update the cache
+    statsCache = stats.toObject();
+    lastCacheTime = Date.now();
+
+    return stats;
   } catch (err) {
     console.error("Error updating stats:", err);
+    throw err;
   }
 }
 
@@ -82,7 +92,6 @@ function initializeStats() {
 
 // Register middleware hooks
 function registerHooks() {
-  // Get the schema directly from the model
   const schema = Entry.schema;
 
   // Post-save hook
@@ -103,14 +112,28 @@ function registerHooks() {
   console.log("Entry stats hooks registered successfully");
 }
 
-// Add a function to manually update stats
+// Function to manually update stats
 async function manualUpdateStats() {
   await updateStats();
 }
 
+// Add a function to get stats with caching
+async function getStats() {
+  // Return cached stats if they're fresh
+  if (statsCache && Date.now() - lastCacheTime < CACHE_TTL) {
+    return statsCache;
+  }
+
+  // Otherwise, update stats and return fresh data
+  const stats = await updateStats();
+  return stats;
+}
+
+// Export the functions
 module.exports = {
   updateStats,
   initializeStats,
   registerHooks,
   manualUpdateStats,
+  getStats,
 };
