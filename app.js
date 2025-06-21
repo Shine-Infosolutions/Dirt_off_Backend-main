@@ -11,6 +11,11 @@ const CustomerdRoutes = require("./src/routes/CustomerdRoutes");
 const ProductRoutes = require("./src/routes/ProductRoutes");
 const NewEntry = require("./src/routes/NewentryRoutes");
 const InvoiceRoutes = require("./src/routes/InvoiceRoutes");
+const {
+  initializeStats,
+  registerHooks,
+} = require("./src/middleware/entryStatsMiddleware");
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://dirt-deploy.vercel.app",
@@ -38,6 +43,16 @@ app.use(
 app.use(express.json());
 dotenv.config();
 connectDB();
+
+// Initialize after connecting to MongoDB
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log("Connected to MongoDB");
+    registerHooks();
+    initializeStats();
+  })
+  .catch((err) => console.error("MongoDB connection error:", err));
 
 const PORT = process.env.PORT || 5000;
 

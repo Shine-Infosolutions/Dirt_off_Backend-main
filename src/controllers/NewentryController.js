@@ -4,6 +4,7 @@ const ReceiptNumber = require("../models/ReceiptNumber"); // Import the ReceiptN
 const dayjs = require("dayjs");
 const utc = require("dayjs/plugin/utc");
 const timezone = require("dayjs/plugin/timezone");
+const { manualUpdateStats } = require("../middleware/entryStatsMiddleware");
 
 // Configure dayjs to handle timezones
 dayjs.extend(utc);
@@ -74,6 +75,9 @@ exports.createNewentry = async (req, res) => {
 
     await newEntry.save();
 
+    // Manually update stats after creating a new entry
+    await manualUpdateStats();
+
     res.status(201).json({
       success: true,
       message: "Entry created successfully",
@@ -142,6 +146,9 @@ exports.updateEntry = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Entry not found" });
 
+    // Manually update stats after updating an entry
+    await manualUpdateStats();
+
     res.status(200).json({
       success: true,
       message: "Entry updated successfully",
@@ -204,6 +211,10 @@ exports.deleteEntry = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Entry Not found" });
     }
+
+    // Manually update stats after deleting an entry
+    await manualUpdateStats();
+
     res
       .status(200)
       .json({ success: true, message: "Entry deleted successfully" });
@@ -557,6 +568,29 @@ exports.toggleVisibility = async (req, res) => {
     });
   } catch (error) {
     console.error("Error toggling entry visibility:", error);
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+};
+
+// Get entry statistics
+exports.getEntryStats = async (req, res) => {
+  try {
+    const EntryStat = require("../models/EntryStat");
+    const stats = await EntryStat.findOne().lean();
+
+    if (!stats) {
+      return res.status(404).json({
+        success: false,
+        message: "Statistics not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: stats,
+    });
+  } catch (error) {
+    console.error("Error fetching entry statistics:", error);
     res.status(500).json({ success: false, message: "Server Error" });
   }
 };
