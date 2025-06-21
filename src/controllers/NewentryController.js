@@ -476,6 +476,8 @@ exports.getPendingDeliveries = async (req, res) => {
             $gte: startOfToday,
             $lte: endOfToday,
           },
+          status: { $ne: "delivered" }, // Exclude delivered entries
+          ...visibilityFilter,
         };
         total = await Entry.countDocuments(query);
         const todayExpectedOrders = await Entry.find(query)
@@ -499,6 +501,7 @@ exports.getPendingDeliveries = async (req, res) => {
             $gte: startOfToday,
             $lte: endOfToday,
           },
+          ...visibilityFilter,
         };
         total = await Entry.countDocuments(query);
         const todayReceivedOrders = await Entry.find(query)
@@ -519,6 +522,17 @@ exports.getPendingDeliveries = async (req, res) => {
       default:
         // Return summary if no specific type is requested
         const visibilityQuery = showAll === "true" ? {} : { visible: true };
+
+        // For todayExpected count, exclude delivered entries
+        const todayExpectedQuery = {
+          "pickupAndDelivery.expectedDeliveryDate": {
+            $gte: startOfToday,
+            $lte: endOfToday,
+          },
+          status: { $ne: "delivered" },
+          ...visibilityQuery,
+        };
+
         const [
           pendingCount,
           collectedCount,
@@ -526,16 +540,10 @@ exports.getPendingDeliveries = async (req, res) => {
           todayExpectedCount,
           todayReceivedCount,
         ] = await Promise.all([
-          Entry.countDocuments({ status: "pending" }),
-          Entry.countDocuments({ status: "collected" }),
-          Entry.countDocuments({ status: "delivered" }),
-          Entry.countDocuments({
-            "pickupAndDelivery.expectedDeliveryDate": {
-              $gte: startOfToday,
-              $lte: endOfToday,
-            },
-            ...visibilityQuery,
-          }),
+          Entry.countDocuments({ status: "pending", ...visibilityQuery }),
+          Entry.countDocuments({ status: "collected", ...visibilityQuery }),
+          Entry.countDocuments({ status: "delivered", ...visibilityQuery }),
+          Entry.countDocuments(todayExpectedQuery),
           Entry.countDocuments({
             createdAt: {
               $gte: startOfToday,
