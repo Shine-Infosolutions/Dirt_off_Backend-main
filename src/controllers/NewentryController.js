@@ -19,7 +19,6 @@ exports.createNewentry = async (req, res) => {
       products,
       charges,
       pickupAndDelivery,
-
       expectedDeliveryDate,
     } = req.body;
 
@@ -27,6 +26,15 @@ exports.createNewentry = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Customer, customerId and expected delivery date are required",
+      });
+    }
+
+    // Fetch customer phone number
+    const customerData = await Customer.findById(customerId);
+    if (!customerData) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
       });
     }
 
@@ -65,6 +73,7 @@ exports.createNewentry = async (req, res) => {
     // Create the new entry with the generated receipt number
     const newEntry = new Entry({
       customer,
+      customerPhone: customerData.phone,
       customerId,
       receiptNo,
       expectedDeliveryDate,

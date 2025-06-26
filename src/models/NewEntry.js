@@ -6,6 +6,10 @@ const NewEntrySchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    customerPhone: {
+      type: Number,
+      required: true,
+    },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Customer", // this should match the name of your Customer model
