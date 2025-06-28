@@ -243,7 +243,8 @@ exports.getPaginatedEntries = async (req, res) => {
     // Only show visible entries unless showAll=true
     const query = showAll === "true" ? {} : { visible: true };
 
-    const total = await Entry.countDocuments();
+    const total = await Entry.countDocuments(query);
+
     const entries = await Entry.find(query)
       .skip(skip)
       .limit(limit)
