@@ -18,6 +18,7 @@ const {
 
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://192.168.1.46:5173",
   "https://dirt-deploy.vercel.app",
   "https://dirt-deploy-nine.vercel.app",
   "http://127.0.0.1:5173",
@@ -69,6 +70,7 @@ app.use("/custdirt", CustomerdRoutes);
 app.use("/product", ProductRoutes);
 app.use("/entry", NewEntry);
 app.use("/invoice", InvoiceRoutes);
+app.use("/api/auth", require("./src/routes/AuthRoutes"));
 
 app.listen(PORT, () => {
   console.log(`🚀 Server started on port ${PORT}`);
