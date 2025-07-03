@@ -13,13 +13,11 @@ exports.createCustomer = async (req, res) => {
     const customer = new Customer(req.body);
     await customer.save();
 
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Customer created successfully",
-        data: customer,
-      });
+    res.status(201).json({
+      success: true,
+      message: "Customer created successfully",
+      data: customer,
+    });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -119,13 +117,50 @@ exports.searchCustomer = async (req, res) => {
         .json({ success: false, message: "Query is required" });
     }
 
-    const customers = await Customer.find({
-      $or: [
-        { firstName: { $regex: q, $options: "i" } },
-        { lastName: { $regex: q, $options: "i" } },
+    // Split the query into words
+    const words = q.trim().split(/\s+/);
+
+    let searchConditions = [];
+
+    if (words.length === 1) {
+      // Single word search - search in all fields
+      const word = words[0];
+      searchConditions = [
+        { firstName: { $regex: word, $options: "i" } },
+        { lastName: { $regex: word, $options: "i" } },
+        { phone: { $regex: word, $options: "i" } },
+        { email: { $regex: word, $options: "i" } },
+      ];
+    } else if (words.length >= 2) {
+      // Multiple words - search for firstName + lastName combinations
+      const [firstWord, secondWord] = words;
+      searchConditions = [
+        // First word as firstName, second as lastName
+        {
+          $and: [
+            { firstName: { $regex: firstWord, $options: "i" } },
+            { lastName: { $regex: secondWord, $options: "i" } },
+          ],
+        },
+        // Second word as firstName, first as lastName
+        {
+          $and: [
+            { firstName: { $regex: secondWord, $options: "i" } },
+            { lastName: { $regex: firstWord, $options: "i" } },
+          ],
+        },
+        // Also include individual word matches
+        { firstName: { $regex: firstWord, $options: "i" } },
+        { lastName: { $regex: firstWord, $options: "i" } },
+        { firstName: { $regex: secondWord, $options: "i" } },
+        { lastName: { $regex: secondWord, $options: "i" } },
         { phone: { $regex: q, $options: "i" } },
         { email: { $regex: q, $options: "i" } },
-      ],
+      ];
+    }
+
+    const customers = await Customer.find({
+      $or: searchConditions,
     });
 
     if (!customers.length) {
