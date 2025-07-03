@@ -1,17 +1,25 @@
-const Customer = require('../models/Customer');
+const Customer = require("../models/Customer");
 
 // Create
 exports.createCustomer = async (req, res) => {
   try {
     const { firstName, phone, email } = req.body;
     if (!firstName || !phone || !email) {
-      return res.status(400).json({ success: false, message: 'Required fields are missing' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Required fields are missing" });
     }
 
     const customer = new Customer(req.body);
     await customer.save();
 
-    res.status(201).json({ success: true, message: 'Customer created successfully', data: customer });
+    res
+      .status(201)
+      .json({
+        success: true,
+        message: "Customer created successfully",
+        data: customer,
+      });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -31,7 +39,10 @@ exports.getAllCustomers = async (req, res) => {
 exports.getCustomerById = async (req, res) => {
   try {
     const customer = await Customer.findById(req.params.id);
-    if (!customer) return res.status(404).json({ success: false, message: 'Customer not found' });
+    if (!customer)
+      return res
+        .status(404)
+        .json({ success: false, message: "Customer not found" });
 
     res.status(200).json({ success: true, data: customer });
   } catch (error) {
@@ -44,11 +55,16 @@ exports.updateCustomer = async (req, res) => {
   try {
     const updated = await Customer.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
-      runValidators: true
+      runValidators: true,
     });
-    if (!updated) return res.status(404).json({ success: false, message: 'Customer not found' });
+    if (!updated)
+      return res
+        .status(404)
+        .json({ success: false, message: "Customer not found" });
 
-    res.status(200).json({ success: true, message: 'Customer updated', data: updated });
+    res
+      .status(200)
+      .json({ success: true, message: "Customer updated", data: updated });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
@@ -58,14 +74,16 @@ exports.updateCustomer = async (req, res) => {
 exports.deleteCustomer = async (req, res) => {
   try {
     const deleted = await Customer.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, message: 'Customer not found' });
+    if (!deleted)
+      return res
+        .status(404)
+        .json({ success: false, message: "Customer not found" });
 
-    res.status(200).json({ success: true, message: 'Customer deleted' });
+    res.status(200).json({ success: true, message: "Customer deleted" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 exports.getPaginatedCustomers = async (req, res) => {
   try {
@@ -84,9 +102,8 @@ exports.getPaginatedCustomers = async (req, res) => {
       page,
       totalPages: Math.ceil(total / limit),
       totalCustomers: total,
-      data:customers
+      data: customers,
     });
-
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -97,18 +114,24 @@ exports.searchCustomer = async (req, res) => {
     const { q } = req.query;
 
     if (!q?.trim()) {
-      return res.status(400).json({ success: false, message: "Query is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Query is required" });
     }
 
     const customers = await Customer.find({
       $or: [
-        { firstName: { $regex: q, $options: 'i' } },
-        { email: { $regex: q, $options: 'i' } }
-      ]
+        { firstName: { $regex: q, $options: "i" } },
+        { lastName: { $regex: q, $options: "i" } },
+        { phone: { $regex: q, $options: "i" } },
+        { email: { $regex: q, $options: "i" } },
+      ],
     });
 
     if (!customers.length) {
-      return res.status(404).json({ success: false, message: "No customers found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No customers found" });
     }
 
     res.status(200).json({ success: true, data: customers });
