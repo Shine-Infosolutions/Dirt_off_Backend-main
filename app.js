@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./src/config/db");
+require("./src/middleware/newEntryMiddleware");
 
 const CustomerRoutes = require("./src/routes/CustomerRoutes");
 const ServiceRoutes = require("./src/routes/ServiceRoutes");

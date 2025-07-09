@@ -3,8 +3,8 @@ const Customer = require("../models/Customer");
 // Create
 exports.createCustomer = async (req, res) => {
   try {
-    const { firstName, phone, email } = req.body;
-    if (!firstName || !phone || !email) {
+    const { firstName, phone } = req.body;
+    if (!firstName || !phone) {
       return res
         .status(400)
         .json({ success: false, message: "Required fields are missing" });

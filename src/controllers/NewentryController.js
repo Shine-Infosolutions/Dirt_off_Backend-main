@@ -76,6 +76,7 @@ exports.createNewentry = async (req, res) => {
       customerPhone: customerData.phone,
       customerId,
       receiptNo,
+      discount: req.body.discount || 0,
       expectedDeliveryDate,
       products,
       charges,

@@ -72,7 +72,10 @@ const NewEntrySchema = new mongoose.Schema(
         required: true,
       },
     },
-
+    discount: {
+      type: Number,
+      default: 0, // Default to 0 if not provided
+    },
     pickupAndDelivery: {
       pickupAddress: {
         type: String,
@@ -109,21 +112,7 @@ const NewEntrySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Pre-save middleware to set delivery date when status becomes "delivered"
-NewEntrySchema.pre("save", function (next) {
-  if (this.status === "delivered" && !this.pickupAndDelivery.deliveryDate) {
-    this.pickupAndDelivery.deliveryDate = new Date();
-    this.markModified("pickupAndDelivery");
-  }
-
-  // Set pickup date when status becomes "collected"
-  if (this.status === "collected" && !this.pickupAndDelivery.pickupDate) {
-    this.pickupAndDelivery.pickupDate = new Date();
-    this.markModified("pickupAndDelivery");
-  }
-  next();
-});
-
+// Indexes for performance optimization
 NewEntrySchema.index({ createdAt: 1 });
 NewEntrySchema.index({ status: 1 });
 NewEntrySchema.index({ "charges.totalAmount": 1 });
