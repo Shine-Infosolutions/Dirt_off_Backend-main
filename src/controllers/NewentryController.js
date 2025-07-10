@@ -420,7 +420,6 @@ exports.getRecentOrdersCount = async (req, res) => {
 };
 
 // api to fetch dashboard stats
-// Optimized dashboard stats API
 exports.getPendingDeliveries = async (req, res) => {
   try {
     const { type, page = 1, showAll } = req.query;
@@ -467,7 +466,12 @@ exports.getPendingDeliveries = async (req, res) => {
       ]);
 
       // Process status counts
-      const statusCounts = { pending: 0, collected: 0, delivered: 0 };
+      const statusCounts = {
+        pending: 0,
+        collected: 0,
+        processedAndPacked: 0,
+        delivered: 0,
+      };
       counts.forEach((item) => {
         if (item._id && statusCounts.hasOwnProperty(item._id)) {
           statusCounts[item._id] = item.count;
@@ -480,13 +484,15 @@ exports.getPendingDeliveries = async (req, res) => {
           summary: {
             pending: { count: statusCounts.pending },
             collected: { count: statusCounts.collected },
+            processedAndPacked: { count: statusCounts.processedAndPacked },
             delivered: { count: statusCounts.delivered },
             todayExpected: { count: todayExpected, date: todayString },
             todayReceived: { count: todayReceived, date: todayString },
             total:
               statusCounts.pending +
               statusCounts.collected +
-              statusCounts.delivered,
+              statusCounts.delivered +
+              statusCounts.processedAndPacked,
           },
         },
       });
@@ -501,6 +507,9 @@ exports.getPendingDeliveries = async (req, res) => {
         break;
       case "collected":
         query.status = "collected";
+        break;
+      case "processedAndPacked":
+        query.status = "processedAndPacked";
         break;
       case "delivered":
         query.status = "delivered";

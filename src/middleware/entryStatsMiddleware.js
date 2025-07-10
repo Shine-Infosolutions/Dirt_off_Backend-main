@@ -27,6 +27,7 @@ async function updateStats() {
       totalEntries,
       pendingCount,
       collectedCount,
+      processedAndPackedCount,
       deliveredCount,
       todayExpectedCount,
       todayReceivedCount,
@@ -34,6 +35,7 @@ async function updateStats() {
       Entry.countDocuments({ visible: true }),
       Entry.countDocuments({ status: "pending", visible: true }),
       Entry.countDocuments({ status: "collected", visible: true }),
+      Entry.countDocuments({ status: "processedAndPacked", visible: true }),
       Entry.countDocuments({ status: "delivered", visible: true }),
       Entry.countDocuments({
         "pickupAndDelivery.expectedDeliveryDate": {
@@ -59,6 +61,7 @@ async function updateStats() {
         totalEntries,
         pendingCount,
         collectedCount,
+        processedAndPackedCount,
         deliveredCount,
         todayExpectedCount,
         todayReceivedCount,

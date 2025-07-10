@@ -25,7 +25,7 @@ const NewEntrySchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "delivered", "collected"],
+      enum: ["pending", "collected", "processedAndPacked", "delivered"],
       default: "pending",
     },
 

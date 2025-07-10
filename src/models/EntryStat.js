@@ -15,6 +15,10 @@ const EntryStatSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    processedAndPackedCount: {
+      type: Number,
+      default: 0,
+    },
     deliveredCount: {
       type: Number,
       default: 0,
