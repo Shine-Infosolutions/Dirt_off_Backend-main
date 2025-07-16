@@ -12,16 +12,16 @@ const NewEntrySchema = new mongoose.Schema(
     },
     customerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Customer", // this should match the name of your Customer model
+      ref: "Customer",
       required: true,
     },
     receiptNo: {
-      type: Number, // This will store the incremented receipt number
+      type: Number,
       required: true,
     },
     visible: {
       type: Boolean,
-      default: true, // Entries are visible by default
+      default: true,
     },
     status: {
       type: String,
@@ -96,6 +96,10 @@ const NewEntrySchema = new mongoose.Schema(
         required: true,
       },
       pickupDate: {
+        type: Date,
+        default: null,
+      },
+      processedAndPackedDate: {
         type: Date,
         default: null,
       },

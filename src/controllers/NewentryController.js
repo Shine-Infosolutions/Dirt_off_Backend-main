@@ -142,6 +142,10 @@ exports.updateEntry = async (req, res) => {
       req.body["pickupAndDelivery.pickupDate"] = new Date();
     }
 
+    if (status === "processedAndPacked") {
+      req.body["pickupAndDelivery.processedAndPackedDate"] = new Date();
+    }
+
     const updatedEntry = await Entry.findByIdAndUpdate(
       req.params.id,
       req.body,
