@@ -77,6 +77,7 @@ exports.createNewentry = async (req, res) => {
       customerId,
       receiptNo,
       discount: req.body.discount || 0,
+      remarks: req.body.remarks || "",
       expectedDeliveryDate,
       products,
       charges,
