@@ -111,10 +111,10 @@ const NewEntrySchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
-      remarks: {
-        type: String,
-        default: "",
-      },
+    },
+    remarks: {
+      type: String,
+      default: "",
     },
   },
   { timestamps: true }
